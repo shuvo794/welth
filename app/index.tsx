@@ -1,11 +1,12 @@
-import { Text, View } from "react-native";
+import { Redirect } from "expo-router";
 
 export default function Index() {
-  return (
-    <View className="text-center justify-center items-center ">
-      <Text className="font-bold text-gray-500 p-10 pt-20 ">
-        My Dream Comming Soon Early -Inshaa Allah
-      </Text>
-    </View>
-  );
+  const isSignedIn = true; // পরে আপনার Auth Logged-in State থাকলে সেটা দিয়ে চেক করবেন
+
+  if (isSignedIn) {
+    return <Redirect href="/(root)/(tabs)" />;
+  }
+
+  return <Redirect href="/(auth)/sign-in" />;
 }
+
