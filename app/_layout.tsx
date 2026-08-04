@@ -1,3 +1,6 @@
+import "../polyfill";
+import "../global.css";
+
 import {
   FlatList,
   Text,
@@ -36,15 +39,7 @@ export default function RootLayout() {
   return (
     <SafeAreaView>
       <View>
-        <Text
-          style={{
-            fontSize: 20,
-            color: "red",
-            fontWeight: "bold",
-            textAlign: "center",
-            marginTop: 20,
-          }}
-        >
+        <Text className="text-2xl font-bold text-red-500 text-center mt-5">
           Assalamu Alaikum
         </Text>
       </View>
