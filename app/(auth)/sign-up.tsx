@@ -73,14 +73,19 @@ export default function SignUp() {
         });
 
         if (createRes?.error) {
-          setErrorMessage(createRes.error.message || "Failed to create account.");
+          setErrorMessage(
+            createRes.error.message || "Failed to create account.",
+          );
           return;
         }
 
-        const sendCodeFn = target?.verifications?.sendEmailCode || target?.sendEmailCode;
+        const sendCodeFn =
+          target?.verifications?.sendEmailCode || target?.sendEmailCode;
         const sendRes = await sendCodeFn.call(target?.verifications || target);
         if (sendRes?.error) {
-          setErrorMessage(sendRes.error.message || "Failed to send verification code.");
+          setErrorMessage(
+            sendRes.error.message || "Failed to send verification code.",
+          );
           return;
         }
 
@@ -95,7 +100,9 @@ export default function SignUp() {
         });
 
         if (typeof target.prepareEmailAddressVerification === "function") {
-          await target.prepareEmailAddressVerification({ strategy: "email_code" });
+          await target.prepareEmailAddressVerification({
+            strategy: "email_code",
+          });
         } else if (typeof target.prepareVerification === "function") {
           await target.prepareVerification({ strategy: "email_code" });
         }
@@ -125,13 +132,16 @@ export default function SignUp() {
 
       // New Clerk Core 2 API
       if (target?.verifications?.verifyEmailCode || target?.verifyEmailCode) {
-        const verifyFn = target?.verifications?.verifyEmailCode || target?.verifyEmailCode;
+        const verifyFn =
+          target?.verifications?.verifyEmailCode || target?.verifyEmailCode;
         const verifyRes = await verifyFn.call(target?.verifications || target, {
           code: data.code,
         });
 
         if (verifyRes?.error) {
-          setErrorMessage(verifyRes.error.message || "Invalid verification code.");
+          setErrorMessage(
+            verifyRes.error.message || "Invalid verification code.",
+          );
           return;
         }
 
@@ -181,14 +191,17 @@ export default function SignUp() {
     try {
       const target = signUp as any;
       if (target?.verifications?.sendEmailCode || target?.sendEmailCode) {
-        const sendCodeFn = target?.verifications?.sendEmailCode || target?.sendEmailCode;
+        const sendCodeFn =
+          target?.verifications?.sendEmailCode || target?.sendEmailCode;
         const sendRes = await sendCodeFn.call(target?.verifications || target);
         if (sendRes?.error) {
           setErrorMessage(sendRes.error.message || "Failed to resend code.");
           return;
         }
       } else if (typeof target.prepareEmailAddressVerification === "function") {
-        await target.prepareEmailAddressVerification({ strategy: "email_code" });
+        await target.prepareEmailAddressVerification({
+          strategy: "email_code",
+        });
       }
 
       alert("A new verification code has been sent to your email.");
@@ -261,7 +274,7 @@ export default function SignUp() {
               name="code"
               render={({ field: { onChange, onBlur, value } }) => (
                 <TextInput
-                  placeholder="560614"
+                  placeholder="Enter your OTP"
                   placeholderTextColor="#9CA3AF"
                   keyboardType="number-pad"
                   onBlur={onBlur}
@@ -331,7 +344,7 @@ export default function SignUp() {
                     name="firstName"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <TextInput
-                        placeholder="Piyush"
+                        placeholder="First Name"
                         placeholderTextColor="#9CA3AF"
                         onBlur={onBlur}
                         onChangeText={onChange}
@@ -353,7 +366,7 @@ export default function SignUp() {
                     name="lastName"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <TextInput
-                        placeholder="Agarwal"
+                        placeholder="Last Name"
                         placeholderTextColor="#9CA3AF"
                         onBlur={onBlur}
                         onChangeText={onChange}
@@ -377,7 +390,7 @@ export default function SignUp() {
                   name="email"
                   render={({ field: { onChange, onBlur, value } }) => (
                     <TextInput
-                      placeholder="piyushagarwalvo@gmail.com"
+                      placeholder="Enter you Email Adress"
                       placeholderTextColor="#9CA3AF"
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -435,7 +448,9 @@ export default function SignUp() {
                 {isLoading ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text className="text-white text-base font-bold">Sign Up</Text>
+                  <Text className="text-white text-base font-bold">
+                    Sign Up
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
