@@ -1,7 +1,18 @@
-import { Stack } from "expo-router";
+import { useAuth } from "@clerk/expo";
+import { Redirect, Stack } from "expo-router";
 import React from "react";
 
 export default function AuthLayout() {
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded) {
+    return null;
+  }
+
+  if (isSignedIn) {
+    return <Redirect href="/(root)/(tabs)" />;
+  }
+
   return (
     <Stack
       screenOptions={{
