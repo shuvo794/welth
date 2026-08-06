@@ -31,3 +31,19 @@ export const codeSchema = z.object({
 
 export type CodeFormValues = z.infer<typeof codeSchema>;
 
+export const resetPasswordEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email is required.")
+    .email("Enter a valid email."),
+});
+
+export type ResetPasswordEmailFormValues = z.infer<typeof resetPasswordEmailSchema>;
+
+export const resetPasswordSubmitSchema = z.object({
+  code: z.string().min(1, "Enter the verification code."),
+  newPassword: z.string().min(8, "Password must be at least 8 characters."),
+});
+
+export type ResetPasswordSubmitFormValues = z.infer<typeof resetPasswordSubmitSchema>;
