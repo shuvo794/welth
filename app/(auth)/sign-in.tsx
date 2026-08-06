@@ -288,11 +288,11 @@ export default function SignIn() {
             </View>
 
             {/* Forgot Password Link */}
-            <View className="align-self-end mb-4 flex-row justify-end">
+            <View className="mb-4 flex-row justify-end">
               <TouchableOpacity
                 onPress={() => {
-                  const currentEmail = control._getFieldArray ? "" : (control._formValues?.email || "");
-                  openResetModal(currentEmail);
+                  const currentEmail = control._formValues?.email;
+                  openResetModal(typeof currentEmail === "string" ? currentEmail : undefined);
                 }}
                 className="py-1"
               >
