@@ -135,6 +135,7 @@ export default function SignIn() {
         strategy: "reset_password_email_code",
         identifier: data.email,
       });
+
       setResetEmail(data.email);
       setResetStep(2);
     } catch (err: any) {
@@ -160,22 +161,26 @@ export default function SignIn() {
       const target = signIn as any;
       let result: any;
 
-      console.log("Clerk signIn object keys:", Object.keys(target));
+      console.log("Attempting password reset with code...");
 
-      if (typeof target.resetPassword === "function") {
-        result = await target.resetPassword({
-          code: data.code,
-          password: data.newPassword,
-        });
-      } else if (typeof target.attemptFirstFactor === "function") {
+      if (typeof target.attemptFirstFactor === "function") {
         result = await target.attemptFirstFactor({
           strategy: "reset_password_email_code",
           code: data.code,
           password: data.newPassword,
         });
-      } else if (target.verifications?.verifyEmailCode || target.verifyEmailCode) {
-        const verifyFn = target.verifications?.verifyEmailCode || target.verifyEmailCode;
-        result = await verifyFn.call(target.verifications || target, {
+      } else if (typeof target.resetPassword === "function") {
+        result = await target.resetPassword({
+          code: data.code,
+          password: data.newPassword,
+        });
+      } else if (target.resetPasswordEmailCode && typeof target.resetPasswordEmailCode.resetPassword === "function") {
+        result = await target.resetPasswordEmailCode.resetPassword({
+          code: data.code,
+          password: data.newPassword,
+        });
+      } else if (target.resetPasswordEmailCode && typeof target.resetPasswordEmailCode.verifyCode === "function") {
+        result = await target.resetPasswordEmailCode.verifyCode({
           code: data.code,
           password: data.newPassword,
         });
@@ -187,13 +192,11 @@ export default function SignIn() {
         });
       }
 
-      console.log("Reset Password Result:", result);
+      console.log("Reset Password Result:", result?.status, result);
 
       if (
         result?.status === "complete" ||
-        result?.createdSessionId ||
-        target?.status === "complete" ||
-        target?.createdSessionId
+        target?.status === "complete"
       ) {
         const sessionId = result?.createdSessionId || target?.createdSessionId;
         if (sessionId && setActive) {
@@ -202,7 +205,12 @@ export default function SignIn() {
         setShowResetModal(false);
         router.replace("/(root)/(tabs)");
       } else {
-        setResetErrorMessage("Reset incomplete. Please check your verification code.");
+        const errorMsg =
+          result?.errors?.[0]?.longMessage ||
+          result?.errors?.[0]?.message ||
+          result?.error?.message ||
+          "Reset incomplete. Please check your verification code and try again.";
+        setResetErrorMessage(errorMsg);
       }
     } catch (err: any) {
       console.error("Reset Password Submit Error Details:", err?.errors || err);
@@ -210,7 +218,7 @@ export default function SignIn() {
         err?.errors?.[0]?.longMessage ||
         err?.errors?.[0]?.message ||
         err?.message ||
-        "Failed to reset password. Please check your code.";
+        "Invalid verification code or password. Please try again.";
       setResetErrorMessage(msg);
     } finally {
       setIsResetLoading(false);
