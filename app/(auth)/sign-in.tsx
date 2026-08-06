@@ -158,15 +158,46 @@ export default function SignIn() {
 
     try {
       const target = signIn as any;
-      const result = await target.attemptFirstFactor({
-        strategy: "reset_password_email_code",
-        code: data.code,
-        password: data.newPassword,
-      });
+      let result: any;
 
-      if (result.status === "complete") {
-        if (setActive) {
-          await setActive({ session: result.createdSessionId });
+      console.log("Clerk signIn object keys:", Object.keys(target));
+
+      if (typeof target.resetPassword === "function") {
+        result = await target.resetPassword({
+          code: data.code,
+          password: data.newPassword,
+        });
+      } else if (typeof target.attemptFirstFactor === "function") {
+        result = await target.attemptFirstFactor({
+          strategy: "reset_password_email_code",
+          code: data.code,
+          password: data.newPassword,
+        });
+      } else if (target.verifications?.verifyEmailCode || target.verifyEmailCode) {
+        const verifyFn = target.verifications?.verifyEmailCode || target.verifyEmailCode;
+        result = await verifyFn.call(target.verifications || target, {
+          code: data.code,
+          password: data.newPassword,
+        });
+      } else {
+        result = await target.create({
+          strategy: "reset_password_email_code",
+          code: data.code,
+          password: data.newPassword,
+        });
+      }
+
+      console.log("Reset Password Result:", result);
+
+      if (
+        result?.status === "complete" ||
+        result?.createdSessionId ||
+        target?.status === "complete" ||
+        target?.createdSessionId
+      ) {
+        const sessionId = result?.createdSessionId || target?.createdSessionId;
+        if (sessionId && setActive) {
+          await setActive({ session: sessionId });
         }
         setShowResetModal(false);
         router.replace("/(root)/(tabs)");
@@ -174,7 +205,7 @@ export default function SignIn() {
         setResetErrorMessage("Reset incomplete. Please check your verification code.");
       }
     } catch (err: any) {
-      console.error("Reset Password Submit Error:", err?.errors || err);
+      console.error("Reset Password Submit Error Details:", err?.errors || err);
       const msg =
         err?.errors?.[0]?.longMessage ||
         err?.errors?.[0]?.message ||
