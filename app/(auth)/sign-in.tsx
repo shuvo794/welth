@@ -30,7 +30,8 @@ export default function SignIn() {
   const insets = useSafeAreaInsets();
   const { isLoaded } = useAuth();
   const { signIn } = useSignIn();
-  const { setActive } = useClerk();
+  const clerk = useClerk();
+  const setActive = clerk.setActive;
   const router = useRouter();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -49,6 +50,7 @@ export default function SignIn() {
   const {
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
@@ -82,23 +84,46 @@ export default function SignIn() {
 
   // Main Sign In Submission
   const onSignInSubmit = async (data: SignInFormValues) => {
-    if (!isLoaded || !signIn) return;
+    if (!isLoaded) return;
     setIsLoading(true);
     setErrorMessage(null);
 
     try {
-      const result = await signIn.create({
-        identifier: data.email,
-        password: data.password,
-      });
+      let result: any;
+      const clientSignIn = (clerk as any)?.client?.signIn || signIn;
 
-      if (result.status === "complete") {
-        if (setActive) {
-          await setActive({ session: result.createdSessionId });
+      console.log("Submitting sign in for email:", data.email);
+
+      try {
+        result = await clientSignIn.create({
+          identifier: data.email,
+          password: data.password,
+        });
+      } catch (err1: any) {
+        console.log("Primary sign in attempt note:", err1?.errors?.[0]?.message || err1?.message || err1);
+
+        // Fallback with explicit strategy: "password"
+        result = await clientSignIn.create({
+          strategy: "password",
+          identifier: data.email,
+          password: data.password,
+        });
+      }
+
+      console.log("Sign In Result Status:", result?.status, result?.createdSessionId);
+
+      if (result?.status === "complete" || result?.createdSessionId) {
+        const sessionId = result.createdSessionId;
+        if (sessionId && setActive) {
+          await setActive({ session: sessionId });
         }
         router.replace("/(root)/(tabs)");
       } else {
-        setErrorMessage("Sign in incomplete. Please check your credentials.");
+        const msg =
+          result?.errors?.[0]?.longMessage ||
+          result?.errors?.[0]?.message ||
+          "Sign in incomplete. Please check your credentials.";
+        setErrorMessage(msg);
       }
     } catch (err: any) {
       console.error("Sign In Error Details:", err?.errors || err);
@@ -131,10 +156,29 @@ export default function SignIn() {
 
     try {
       const target = signIn as any;
-      await target.create({
-        strategy: "reset_password_email_code",
-        identifier: data.email,
-      });
+
+      // 1. Initialize signIn session for email identifier
+      try {
+        await target.create({
+          identifier: data.email,
+        });
+      } catch (createErr: any) {
+        console.log("Create signIn note:", createErr?.message || createErr);
+      }
+
+      // 2. Request reset password email code
+      if (target.resetPasswordEmailCode?.sendCode) {
+        const sendRes = await target.resetPasswordEmailCode.sendCode();
+        if (sendRes?.error) {
+          setResetErrorMessage(sendRes.error.message || "Failed to send reset code.");
+          return;
+        }
+      } else {
+        await target.create({
+          strategy: "reset_password_email_code",
+          identifier: data.email,
+        });
+      }
 
       setResetEmail(data.email);
       setResetStep(2);
@@ -159,59 +203,56 @@ export default function SignIn() {
 
     try {
       const target = signIn as any;
-      let result: any;
 
-      console.log("Attempting password reset with code...");
+      // 1. Verify Code
+      if (target.resetPasswordEmailCode?.verifyCode) {
+        console.log("Executing verifyCode...");
+        const verifyRes = await target.resetPasswordEmailCode.verifyCode({ code: data.code });
+        console.log("verifyRes:", verifyRes);
 
-      if (typeof target.attemptFirstFactor === "function") {
-        result = await target.attemptFirstFactor({
-          strategy: "reset_password_email_code",
-          code: data.code,
-          password: data.newPassword,
-        });
-      } else if (typeof target.resetPassword === "function") {
-        result = await target.resetPassword({
-          code: data.code,
-          password: data.newPassword,
-        });
-      } else if (target.resetPasswordEmailCode && typeof target.resetPasswordEmailCode.resetPassword === "function") {
-        result = await target.resetPasswordEmailCode.resetPassword({
-          code: data.code,
-          password: data.newPassword,
-        });
-      } else if (target.resetPasswordEmailCode && typeof target.resetPasswordEmailCode.verifyCode === "function") {
-        result = await target.resetPasswordEmailCode.verifyCode({
-          code: data.code,
-          password: data.newPassword,
-        });
-      } else {
-        result = await target.create({
-          strategy: "reset_password_email_code",
-          code: data.code,
-          password: data.newPassword,
-        });
+        if (verifyRes?.error) {
+          setResetErrorMessage(verifyRes.error.message || "Invalid verification code.");
+          return;
+        }
       }
 
-      console.log("Reset Password Result:", result?.status, result);
+      // 2. Submit New Password
+      if (target.resetPasswordEmailCode?.submitPassword) {
+        console.log("Executing submitPassword...");
+        const passwordRes = await target.resetPasswordEmailCode.submitPassword({ password: data.newPassword });
+        console.log("passwordRes:", passwordRes);
 
-      if (
-        result?.status === "complete" ||
-        target?.status === "complete"
-      ) {
-        const sessionId = result?.createdSessionId || target?.createdSessionId;
-        if (sessionId && setActive) {
-          await setActive({ session: sessionId });
+        if (passwordRes?.error) {
+          setResetErrorMessage(passwordRes.error.message || "Failed to update password.");
+          return;
+        }
+      } else if (typeof target.attemptFirstFactor === "function") {
+        const attemptRes = await target.attemptFirstFactor({
+          strategy: "reset_password_email_code",
+          code: data.code,
+          password: data.newPassword,
+        });
+        if (attemptRes?.error) {
+          setResetErrorMessage(attemptRes.error.message || "Failed to reset password.");
+          return;
+        }
+      }
+
+      // 3. Complete session or auto-fill Sign In
+      if (target.status === "complete" && target.createdSessionId) {
+        if (setActive) {
+          await setActive({ session: target.createdSessionId });
         }
         setShowResetModal(false);
         router.replace("/(root)/(tabs)");
-      } else {
-        const errorMsg =
-          result?.errors?.[0]?.longMessage ||
-          result?.errors?.[0]?.message ||
-          result?.error?.message ||
-          "Reset incomplete. Please check your verification code and try again.";
-        setResetErrorMessage(errorMsg);
+        return;
       }
+
+      setShowResetModal(false);
+      setValue("email", resetEmail);
+      setValue("password", data.newPassword);
+      setErrorMessage(null);
+      alert("Password reset successfully! Please tap 'Sign In' below to log in.");
     } catch (err: any) {
       console.error("Reset Password Submit Error Details:", err?.errors || err);
       const msg =
