@@ -40,7 +40,7 @@ export const useUserSync = () => {
 
         if (existingUser) {
           setCurrency(existingUser.currency ?? "INR");
-          setNeedsOnboarding(!existingUser.currency);
+          setNeedsOnboarding(true); // Forced true so user can view & test Onboarding UI on mobile
           return;
         }
 

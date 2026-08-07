@@ -10,6 +10,6 @@ interface UserState {
 export const useUserStore = create<UserState>((set) => ({
   currency: "BDT",
   setCurrency: (value) => set({ currency: value }),
-  needsOnboarding: null,
+  needsOnboarding: true,
   setNeedsOnboarding: (value) => set({ needsOnboarding: value }),
 }));
