@@ -1,16 +1,19 @@
 import { useSupabase } from "@/hooks/useSupabase";
 import { useUserStore } from "@/store/userStore";
 import { useUser } from "@clerk/expo";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export const useUserSync = () => {
   const { user } = useUser();
   const setCurrency = useUserStore((state) => state.setCurrency);
   const setNeedsOnboarding = useUserStore((state) => state.setNeedsOnboarding);
   const authSupabase = useSupabase();
+  const syncedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
+    if (syncedUserIdRef.current === user.id) return;
+    syncedUserIdRef.current = user.id;
 
     const syncUser = async () => {
       try {
@@ -21,7 +24,13 @@ export const useUserSync = () => {
           .single();
 
         if (fetchError && fetchError.code !== "PGRST116") {
-          console.error("Error fetching user:", fetchError);
+          if (fetchError.code === "42501") {
+            console.warn(
+              "Supabase RLS Policy (42501): Read permission denied on 'users' table. Please check RLS policies in Supabase SQL Editor.",
+            );
+          } else {
+            console.error("Error fetching user:", fetchError);
+          }
           setNeedsOnboarding(true);
           return;
         }
@@ -32,15 +41,16 @@ export const useUserSync = () => {
           return;
         }
 
-        const email = user.emailAddresses[0].emailAddress;
+        const email = user.emailAddresses[0]?.emailAddress;
+        const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
 
-        const { data: newUser, error: insertError } = await authSupabase
+        let { data: newUser, error: insertError } = await authSupabase
           .from("users")
           .upsert(
             {
               clerk_id: user.id,
               email,
-              name: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+              name: name || undefined,
               image_url: user.imageUrl,
             },
             { onConflict: "clerk_id", ignoreDuplicates: false },
@@ -48,8 +58,34 @@ export const useUserSync = () => {
           .select("currency")
           .single();
 
+        if (insertError && insertError.code === "PGRST204") {
+          console.warn(
+            "Column mismatch in 'users' table schema (e.g. missing 'name'), retrying minimal upsert...",
+          );
+          const retry = await authSupabase
+            .from("users")
+            .upsert(
+              {
+                clerk_id: user.id,
+                email,
+              },
+              { onConflict: "clerk_id", ignoreDuplicates: false },
+            )
+            .select("currency")
+            .single();
+
+          newUser = retry.data;
+          insertError = retry.error;
+        }
+
         if (insertError) {
-          console.error("Error upserting user:", insertError);
+          if (insertError.code === "42501") {
+            console.warn(
+              "Supabase RLS Policy Notice (42501): The 'users' table has Row Level Security enabled. Please add an INSERT / UPSERT policy in Supabase SQL Editor to sync user records to Supabase DB.",
+            );
+          } else {
+            console.error("Error upserting user:", insertError);
+          }
           setNeedsOnboarding(true);
           return;
         }
