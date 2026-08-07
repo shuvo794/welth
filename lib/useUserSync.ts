@@ -17,7 +17,7 @@ export const useUserSync = () => {
 
     const syncUser = async () => {
       try {
-        const { data: existingUser, error: fetchError } = await authSupabase
+        let { data: existingUser, error: fetchError } = await authSupabase
           .from("users")
           .select("clerk_id, currency")
           .eq("clerk_id", user.id)
@@ -35,14 +35,14 @@ export const useUserSync = () => {
           return;
         }
 
+        const email = user.emailAddresses[0]?.emailAddress;
+        const imageUrl = user.imageUrl ?? null;
+
         if (existingUser) {
           setCurrency(existingUser.currency ?? "INR");
           setNeedsOnboarding(!existingUser.currency);
           return;
         }
-
-        const email = user.emailAddresses[0]?.emailAddress;
-        const name = `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim();
 
         let { data: newUser, error: insertError } = await authSupabase
           .from("users")
@@ -50,8 +50,7 @@ export const useUserSync = () => {
             {
               clerk_id: user.id,
               email,
-              name: name || undefined,
-              image_url: user.imageUrl,
+              image_url: imageUrl,
             },
             { onConflict: "clerk_id", ignoreDuplicates: false },
           )
@@ -59,9 +58,6 @@ export const useUserSync = () => {
           .single();
 
         if (insertError && insertError.code === "PGRST204") {
-          console.warn(
-            "Column mismatch in 'users' table schema (e.g. missing 'name'), retrying minimal upsert...",
-          );
           const retry = await authSupabase
             .from("users")
             .upsert(
