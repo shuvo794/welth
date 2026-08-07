@@ -26,6 +26,7 @@ interface CurrencyPickerProps {
   visible: boolean;
   onClose: () => void;
   onSelect: (currency: CurrencyEntry) => void;
+  selectedCode?: string;
   selectedCurrency?: CurrencyEntry;
 }
 
@@ -33,6 +34,7 @@ export function CurrencyPicker({
   visible,
   onClose,
   onSelect,
+  selectedCode,
   selectedCurrency,
 }: CurrencyPickerProps) {
   const [search, setSearch] = useState("");
@@ -82,7 +84,8 @@ export function CurrencyPicker({
             <View className="h-[1px] bg-gray-100 ml-16" />
           )}
           renderItem={({ item }) => {
-            const isSelected = selectedCurrency?.code === item.code;
+            const isSelected =
+              (selectedCode ?? selectedCurrency?.code) === item.code;
             return (
               <TouchableOpacity
                 onPress={() => {

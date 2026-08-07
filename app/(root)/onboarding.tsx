@@ -3,33 +3,27 @@ import { useSupabase } from "@/hooks/useSupabase";
 import { OnboardingFormValues, onboardingSchema } from "@/lib/schemas/onboarding";
 import { useUserStore } from "@/store/userStore";
 import { useUser } from "@clerk/expo";
-import { Ionicons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "expo-router";
+import { router } from "expo-router";
 import React, { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
-  ActivityIndicator,
-  FlatList,
+  Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
-  SafeAreaView,
-  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function OnboardingScreen() {
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
   const { user } = useUser();
   const authSupabase = useSupabase();
-  const setCurrency = useUserStore((state) => state.setCurrency);
-  const setNeedsOnboarding = useUserStore((state) => state.setNeedsOnboarding);
+  const setCurrency = useUserStore((s) => s.setCurrency);
+  const setNeedsOnboarding = useUserStore((s) => s.setNeedsOnboarding);
 
   const {
     control,
@@ -48,163 +42,169 @@ export default function OnboardingScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const onSubmit = async (data: OnboardingFormValues) => {
-    if (!user) return;
+  const handleSave = async ({ startingBalance }: OnboardingFormValues) => {
+    if (!user?.id) return;
+    const parsed = parseFloat(startingBalance.replace(/,/g, ""));
     setSaving(true);
     setError("");
 
-    try {
-      const parsedBalance = parseFloat(data.startingBalance.replace(/,/g, ""));
+    const { error: updateError } = await authSupabase
+      .from("users")
+      .update({
+        currency: selectedCurrency.code,
+      })
+      .eq("clerk_id", user.id);
 
-      setCurrency(selectedCurrency.code);
-
-      const { error: userError } = await authSupabase
-        .from("users")
-        .update({ currency: selectedCurrency.code })
-        .eq("clerk_id", user.id);
-
-      if (userError) console.warn("Supabase user update note:", userError.message);
-
-      const { error: accountError } = await authSupabase
-        .from("accounts")
-        .update({ balance: parsedBalance })
-        .eq("user_id", user.id)
-        .eq("is_default", true);
-
-      if (accountError) console.warn("Supabase account balance update note:", accountError.message);
-
-      setNeedsOnboarding(false);
-      router.replace("/(root)/(tabs)");
-    } catch (err: any) {
-      console.error("Onboarding error:", err);
-      setError(err?.message || "Failed to complete setup.");
-    } finally {
+    if (updateError) {
+      console.error("User currency update error:", updateError);
       setSaving(false);
+      setError("Something went wrong. Please try again.");
+      return;
     }
+
+    const { data: defaultAccount, error: accountFetchError } = await authSupabase
+      .from("accounts")
+      .select("id, balance")
+      .eq("user_id", user.id)
+      .eq("is_default", true)
+      .single();
+
+    if (accountFetchError || !defaultAccount) {
+      console.error("Account fetch error:", accountFetchError);
+      setSaving(false);
+      setError("Something went wrong. Please try again.");
+      return;
+    }
+
+    const { error: txError } = await authSupabase.from("transactions").insert({
+      user_id: user.id,
+      account_id: defaultAccount.id,
+      type: "INCOME",
+      amount: parsed,
+      category: "other_income",
+      description: "Starting balance",
+      date: new Date().toISOString(),
+      input_method: "MANUAL",
+    });
+
+    if (txError) {
+      console.error("Transaction insert error:", txError);
+      setSaving(false);
+      setError("Something went wrong. Please try again.");
+      return;
+    }
+
+    const { error: balanceError } = await authSupabase
+      .from("accounts")
+      .update({ balance: defaultAccount.balance + parsed })
+      .eq("id", defaultAccount.id);
+
+    setSaving(false);
+
+    if (balanceError) {
+      console.error("Account balance update error:", balanceError);
+      setError("Something went wrong. Please try again.");
+      return;
+    }
+
+    setCurrency(selectedCurrency.code);
+    setNeedsOnboarding(false);
+    router.replace("/(root)/(tabs)");
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-[#F7F7F6]">
+    <SafeAreaView className="flex-1 bg-brand-body" edges={["top"]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         className="flex-1"
       >
-        <ScrollView
-          contentContainerStyle={{
-            paddingTop: Math.max(insets.top + 20, 36),
-            paddingBottom: Math.max(insets.bottom + 20, 24),
-            paddingHorizontal: 24,
-            flexGrow: 1,
-          }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Logo Header */}
-          <View className="mb-10 mt-2">
-            <View className="flex-row items-center">
-              <Ionicons name="stats-chart" size={28} color="#1E293B" />
-              <Text className="text-3xl font-extrabold text-[#0F172A] tracking-tight ml-2">
-                Welth<Text className="text-blue-600">.</Text>
-              </Text>
-            </View>
-          </View>
+        <View className="flex-1 px-6 justify-center -mt-16">
+          <Image
+            source={require("../../assets/images/welth.png")}
+            className="w-32 h-14 mb-10"
+            resizeMode="contain"
+          />
+          <Text className="text-[#1A1D26] text-3xl font-bold mb-2">
+            Let&apos;s get you set up
+          </Text>
+          <Text className="text-brand-text-muted text-sm mb-10">
+            A couple of quick details to personalise your experience.
+          </Text>
 
-          {/* Heading & Subtitle */}
-          <View className="mb-8">
-            <Text className="text-3xl font-bold text-gray-900 tracking-tight">
-              Let's get you set up
-            </Text>
-            <Text className="text-sm text-gray-500 mt-2 font-normal">
-              A couple of quick details to personalise your experience.
-            </Text>
-          </View>
-
-          {/* Starting balance field */}
-          <View className="mb-5">
-            <Text className="text-sm font-semibold text-gray-700 mb-2">
-              Starting balance
+          {/* Starting balance */}
+          <Text className="text-brand-bg text-xs font-medium mb-1.5">
+            Starting balance
+          </Text>
+          <View className="flex-row items-center bg-white border border-[#E8E6DF] rounded-xl px-4 mb-1">
+            <Text className="text-brand-text-secondary text-sm mr-2">
+              {selectedCurrency.symbol}
             </Text>
             <Controller
               control={control}
               name="startingBalance"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <View className="w-full relative flex-row items-center bg-white border border-gray-200 rounded-2xl shadow-sm px-4 py-3.5">
-                  <Text className="text-base text-gray-400 mr-2 font-medium">
-                    {selectedCurrency.symbol}
-                  </Text>
-                  <TextInput
-                    placeholder="e.g. 50000"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="decimal-pad"
-                    onBlur={onBlur}
-                    onChangeText={onChange}
-                    value={value}
-                    className="flex-1 text-base text-gray-900 font-medium py-0"
-                  />
-                </View>
+              render={({ field: { value, onChange } }) => (
+                <TextInput
+                  value={value}
+                  onChangeText={(v) => {
+                    setError("");
+                    onChange(v);
+                  }}
+                  placeholder="e.g. 50000"
+                  placeholderTextColor="#8A8D96"
+                  keyboardType="numeric"
+                  returnKeyType="done"
+                  className="flex-1 py-3.5 text-sm text-brand-bg"
+                />
               )}
             />
-            {formErrors.startingBalance && (
-              <Text className="text-red-500 text-xs mt-1.5 font-medium ml-1">
-                {formErrors.startingBalance.message}
-              </Text>
-            )}
           </View>
-
-          {/* Currency field */}
-          <View className="mb-6">
-            <Text className="text-sm font-semibold text-gray-700 mb-2">
-              Currency
+          {formErrors.startingBalance && (
+            <Text className="text-brand-coral text-xs mb-4">
+              {formErrors.startingBalance.message}
             </Text>
-            <TouchableOpacity
-              onPress={() => setPickerOpen(true)}
-              className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-4 flex-row items-center justify-between shadow-sm active:bg-gray-50"
-            >
-              <Text
-                className="text-base text-gray-900 font-medium flex-1 pr-2"
-                numberOfLines={1}
-              >
-                {selectedCurrency.symbol} {selectedCurrency.code} — {selectedCurrency.name}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
+          )}
+          <View className="mb-4" />
 
-          {/* Error Display */}
+          {/* Currency picker */}
+          <Text className="text-brand-bg text-xs font-medium mb-1.5">
+            Currency
+          </Text>
+          <TouchableOpacity
+            onPress={() => setPickerOpen(true)}
+            className="flex-row items-center justify-between bg-white border border-[#E8E6DF] rounded-xl px-4 py-3.5 mb-6"
+          >
+            <Text className="text-sm text-brand-bg">
+              {selectedCurrency.symbol} {selectedCurrency.code} —{" "}
+              {selectedCurrency.name}
+            </Text>
+            <Feather name="chevron-down" size={16} color="#8A8D96" />
+          </TouchableOpacity>
+
           {error ? (
-            <View className="bg-red-50 border border-red-200 rounded-xl p-3.5 mb-4 flex-row items-center">
-              <Ionicons name="alert-circle-outline" size={20} color="#EF4444" />
-              <Text className="text-red-600 text-sm font-medium flex-1 ml-2">
-                {error}
-              </Text>
-            </View>
+            <Text className="text-brand-coral text-xs mb-4">{error}</Text>
           ) : null}
 
-          {/* Get started button */}
-          <View className="mt-4">
-            <TouchableOpacity
-              onPress={handleSubmit(onSubmit)}
-              disabled={saving}
-              className="w-full bg-[#0F172A] active:bg-gray-800 py-4 rounded-2xl items-center justify-center shadow-sm"
-            >
-              {saving ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text className="text-white text-base font-bold">
-                  Get started
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+          <TouchableOpacity
+            onPress={handleSubmit(handleSave)}
+            disabled={saving}
+            className="bg-brand-bg rounded-xl py-4 items-center"
+            activeOpacity={0.85}
+          >
+            <Text className="text-white text-sm font-semibold">
+              {saving ? "Saving…" : "Get started"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
 
-      {/* Currency Picker Modal Component */}
       <CurrencyPicker
         visible={pickerOpen}
+        selectedCode={selectedCurrency.code}
+        onSelect={(currency) => {
+          setSelectedCurrency(currency);
+          setPickerOpen(false);
+        }}
         onClose={() => setPickerOpen(false)}
-        onSelect={setSelectedCurrency}
-        selectedCurrency={selectedCurrency}
       />
     </SafeAreaView>
   );
