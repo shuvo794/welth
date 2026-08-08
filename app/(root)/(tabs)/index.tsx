@@ -1,15 +1,20 @@
+import { BudgetModal } from "@/components/BudgetModal";
+import { TransactionRow } from "@/components/TransactionRow";
+import { getCategoryConfig } from "@/constans/categories";
 import { useAccountsQuery } from "@/hooks/queries/useAccountsQuery";
 import { useBudgetQuery } from "@/hooks/queries/useBudgetQuery";
 import { useTransactionsQuery } from "@/hooks/queries/useTransactionsQuery";
 import { formatPrice } from "@/lib/utils";
 import { useUserStore } from "@/store/userStore";
+import { Transaction } from "@/types/transaction";
 import { useUser } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import { isSameMonth } from "date-fns";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { Image } from "expo-image";
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { PieChart } from "@/components/PieChart";
 import { RefreshControl } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -99,6 +104,23 @@ export default function HomeScreen() {
     () => transactions.slice(0, 5),
     [transactions],
   );
+
+  const expenseBreakdown = useMemo(() => {
+    const map: Record<string, number> = {};
+    monthTransactions
+      .filter((tx) => tx.type === "EXPENSE")
+      .forEach((tx) => {
+        map[tx.category] = (map[tx.category] ?? 0) + tx.amount;
+      });
+
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .map(([category, amount]) => ({
+        category: category as Transaction["category"],
+        amount,
+        color: getCategoryConfig(category as Transaction["category"]).color,
+      }));
+  }, [monthTransactions]);
 
   return (
     <SafeAreaView className="flex-1 bg-brand-bg" edges={["top"]}>
@@ -251,7 +273,7 @@ export default function HomeScreen() {
             )}
           </TouchableOpacity>
 
-          {/* {expenseBreakdown.length > 0 && (
+          {expenseBreakdown.length > 0 && (
             <View className="bg-white rounded-[18px] border border-[#E8E6DF] p-4 mb-[18px]">
               <Text className="text-[#1A1D26] text-sm font-medium mb-3">
                 Expense breakdown (this month)
@@ -289,9 +311,9 @@ export default function HomeScreen() {
                 </View>
               </View>
             </View>
-          )} */}
+          )}
 
-          {/* <View className="flex-row justify-between items-center mb-3">
+          <View className="flex-row justify-between items-center mb-3">
             <Text className="text-[#1A1D26] text-sm font-medium">
               Recent transactions
             </Text>
@@ -300,9 +322,9 @@ export default function HomeScreen() {
             >
               <Text className="text-brand-text-secondary text-xs">See all</Text>
             </TouchableOpacity>
-          </View> */}
+          </View>
 
-          {/* {loading ? (
+          {loading ? (
             <View className="items-center py-6">
               <ActivityIndicator color="#4A9EFF" />
             </View>
@@ -317,18 +339,18 @@ export default function HomeScreen() {
             recentTransactions.map((tx) => (
               <TransactionRow key={tx.id} tx={tx} />
             ))
-          )} */}
+          )}
         </View>
       </ScrollView>
 
-      {/* {user && (
+      {user && (
         <BudgetModal
           visible={budgetModalOpen}
           budget={budget}
           onClose={() => setBudgetModalOpen(false)}
           onSaved={() => setBudgetModalOpen(false)}
         />
-      )} */}
+      )}
     </SafeAreaView>
   );
 }
