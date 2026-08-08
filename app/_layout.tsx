@@ -6,6 +6,7 @@ import { tokenCache } from "@clerk/expo/token-cache";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Slot } from "expo-router";
 import React from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { queryClient } from "../lib/query/client";
 
@@ -17,10 +18,12 @@ if (!publishableKey) {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-        <Slot />
-      </ClerkProvider>
-    </QueryClientProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <QueryClientProvider client={queryClient}>
+        <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+          <Slot />
+        </ClerkProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
