@@ -17,12 +17,10 @@ if (!publishableKey) {
 
 export default function RootLayout() {
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
         <Slot />
-      </QueryClientProvider>
-    </ClerkProvider>
+      </ClerkProvider>
+    </QueryClientProvider>
   );
 }
-
-
