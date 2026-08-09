@@ -1,4 +1,5 @@
 import { BudgetModal } from "@/components/BudgetModal";
+import { PieChart } from "@/components/PieChart";
 import { TransactionRow } from "@/components/TransactionRow";
 import { getCategoryConfig } from "@/constans/categories";
 import { useAccountsQuery } from "@/hooks/queries/useAccountsQuery";
@@ -13,8 +14,13 @@ import { isSameMonth } from "date-fns";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { PieChart } from "@/components/PieChart";
+import {
+  ActivityIndicator,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { RefreshControl } from "react-native-gesture-handler";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -107,20 +113,48 @@ export default function HomeScreen() {
 
   const expenseBreakdown = useMemo(() => {
     const map: Record<string, number> = {};
-    monthTransactions
-      .filter((tx) => tx.type === "EXPENSE")
-      .forEach((tx) => {
+    const monthExpenses = monthTransactions.filter(
+      (tx) => tx.type === "EXPENSE",
+    );
+    const expenseTxs =
+      monthExpenses.length > 0
+        ? monthExpenses
+        : transactions.filter((tx) => tx.type === "EXPENSE");
+
+    expenseTxs.forEach((tx) => {
+      if (
+        tx.category &&
+        getCategoryConfig(tx.category as Transaction["category"])
+      ) {
         map[tx.category] = (map[tx.category] ?? 0) + tx.amount;
-      });
+      }
+    });
 
     return Object.entries(map)
       .sort((a, b) => b[1] - a[1])
       .map(([category, amount]) => ({
         category: category as Transaction["category"],
         amount,
-        color: getCategoryConfig(category as Transaction["category"]).color,
+        color:
+          getCategoryConfig(category as Transaction["category"])?.color ??
+          "#BDC3C7",
       }));
-  }, [monthTransactions]);
+  }, [monthTransactions, transactions]);
+
+  const DEFAULT_EXPENSE_BREAKDOWN = useMemo(
+    () => [
+      { category: "food" as const, amount: 4500, color: "#FF6B6B" },
+      { category: "groceries" as const, amount: 3200, color: "#FF9F43" },
+      { category: "transport" as const, amount: 2100, color: "#4ECDC4" },
+      { category: "shopping" as const, amount: 1500, color: "#45B7D1" },
+    ],
+    [],
+  );
+
+  const displayBreakdown = useMemo(() => {
+    if (expenseBreakdown.length > 0) return expenseBreakdown;
+    return DEFAULT_EXPENSE_BREAKDOWN;
+  }, [expenseBreakdown, DEFAULT_EXPENSE_BREAKDOWN]);
 
   return (
     <SafeAreaView className="flex-1 bg-brand-bg" edges={["top"]}>
@@ -273,45 +307,50 @@ export default function HomeScreen() {
             )}
           </TouchableOpacity>
 
-          {expenseBreakdown.length > 0 && (
-            <View className="bg-white rounded-[18px] border border-[#E8E6DF] p-4 mb-[18px]">
-              <Text className="text-[#1A1D26] text-sm font-medium mb-3">
-                Expense breakdown (this month)
+          <View className="bg-white rounded-[18px] border border-[#E8E6DF] p-4 mb-[18px]">
+            <View className="flex-row items-center justify-between mb-3">
+              <Text className="text-[#1A1D26] text-sm font-medium">
+                Expense breakdown
               </Text>
-              <View className="flex-row items-center">
-                <PieChart
-                  data={expenseBreakdown.map((c) => ({
-                    value: c.amount,
-                    color: c.color,
-                  }))}
-                  radius={60}
-                  innerRadius={38}
-                  innerCircleColor="#fff"
-                />
-                <View className="flex-1 ml-4 gap-1.5">
-                  {expenseBreakdown.slice(0, 6).map((c) => (
-                    <View
-                      key={c.category}
-                      className="flex-row items-center justify-between"
-                    >
-                      <View className="flex-row items-center gap-1.5">
-                        <View
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: c.color }}
-                        />
-                        <Text className="text-brand-text-secondary text-[11px]">
-                          {getCategoryConfig(c.category).label}
-                        </Text>
-                      </View>
-                      <Text className="text-brand-bg text-[11px] font-medium">
-                        {formatPrice(c.amount, currency)}
+              {expenseBreakdown.length === 0 && (
+                <Text className="text-brand-text-secondary text-[10px] font-medium bg-[#F5F4F0] px-2 py-0.5 rounded-full">
+                  Sample Overview
+                </Text>
+              )}
+            </View>
+            <View className="flex-row items-center">
+              <PieChart
+                data={displayBreakdown.map((c) => ({
+                  value: c.amount,
+                  color: c.color,
+                }))}
+                radius={60}
+                innerRadius={38}
+                innerCircleColor="#fff"
+              />
+              <View className="flex-1 ml-4 gap-1.5">
+                {displayBreakdown.slice(0, 6).map((c) => (
+                  <View
+                    key={c.category}
+                    className="flex-row items-center justify-between"
+                  >
+                    <View className="flex-row items-center gap-1.5">
+                      <View
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: c.color }}
+                      />
+                      <Text className="text-brand-text-secondary text-[11px]">
+                        {getCategoryConfig(c.category)?.label ?? c.category}
                       </Text>
                     </View>
-                  ))}
-                </View>
+                    <Text className="text-brand-bg text-[11px] font-medium">
+                      {formatPrice(c.amount, currency)}
+                    </Text>
+                  </View>
+                ))}
               </View>
             </View>
-          )}
+          </View>
 
           <View className="flex-row justify-between items-center mb-3">
             <Text className="text-[#1A1D26] text-sm font-medium">
