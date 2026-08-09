@@ -66,3 +66,17 @@ export async function deleteTransaction(
   const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) throw error;
 }
+
+export async function createTransaction(
+  supabase: SupabaseClient,
+  tx: NewTransaction,
+) {
+  const { data, error } = await supabase
+    .from("transactions")
+    .insert(tx)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data as Transaction;
+}

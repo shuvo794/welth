@@ -1,5 +1,10 @@
 import { queryKeys } from "@/lib/query/key";
-import { deleteTransaction, getTransactions } from "@/lib/services/transactions";
+import {
+  createTransaction,
+  deleteTransaction,
+  getTransactions,
+  NewTransaction,
+} from "@/lib/services/transactions";
 import { TransactionFilters } from "@/types/transaction";
 import { useUser } from "@clerk/expo";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +27,20 @@ export function useDeleteTransaction() {
 
   return useMutation({
     mutationFn: (id: string) => deleteTransaction(supabase, id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    },
+  });
+}
+
+export function useCreateTransaction() {
+  const supabase = useSupabase();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (tx: NewTransaction) => createTransaction(supabase, tx),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budgets"] });

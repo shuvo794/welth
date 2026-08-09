@@ -59,7 +59,10 @@ export default function TransactionsScreen() {
     isRefetching: transactionsRefetching,
     isError: transactionsError,
     refetch: refetchTransactions,
-  } = useTransactionsQuery({ type: typeFilter, accountId: activeAccountId });
+  } = useTransactionsQuery({
+    type: typeFilter ?? undefined,
+    accountId: activeAccountId ?? undefined,
+  });
   const { data: accounts = [], refetch: refetchAccounts } = useAccountsQuery();
   const { mutateAsync: removeTransaction } = useDeleteTransaction();
 
@@ -335,7 +338,7 @@ export default function TransactionsScreen() {
 
       {/* Add transaction FAB - navigates to the Add tab */}
       <TouchableOpacity
-        onPress={() => router.push("/(root)/(tabs)/add-transaction")}
+        onPress={() => router.push("/(root)/(tabs)/add")}
         className="absolute right-5 w-14 h-14 rounded-full bg-brand-bg items-center justify-center shadow-lg"
         style={{ bottom: 90 }}
         activeOpacity={0.85}
