@@ -39,7 +39,7 @@ export const useUserSync = () => {
         const imageUrl = user.imageUrl ?? null;
 
         if (existingUser) {
-          setCurrency(existingUser.currency ?? "INR");
+          setCurrency(existingUser.currency ?? "BDT");
           setNeedsOnboarding(true); // Forced true so user can view & test Onboarding UI on mobile
           return;
         }
@@ -86,7 +86,7 @@ export const useUserSync = () => {
           return;
         }
 
-        setCurrency(newUser?.currency ?? "INR");
+        setCurrency(newUser?.currency ?? "BDT");
         setNeedsOnboarding(!newUser?.currency);
 
         const { error: accountError } = await authSupabase

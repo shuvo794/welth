@@ -36,7 +36,7 @@ export default function OnboardingScreen() {
   });
 
   const [selectedCurrency, setSelectedCurrency] = useState(
-    ALL_CURRENCIES.find((c) => c.code === "INR") ?? ALL_CURRENCIES[0]
+    ALL_CURRENCIES.find((c) => c.code === "BDT") ?? ALL_CURRENCIES[0]
   );
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
