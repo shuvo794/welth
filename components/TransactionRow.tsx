@@ -1,19 +1,12 @@
 import { getCategoryConfig } from "@/constans/categories";
+import { useDeleteTransaction } from "@/hooks/queries/useTransactionsQuery";
 import { formatPrice } from "@/lib/utils";
 import { useUserStore } from "@/store/userStore";
 import { Transaction } from "@/types/transaction";
 import { Feather } from "@expo/vector-icons";
-import { Text, TouchableOpacity, View } from "react-native";
+import * as Haptics from "expo-haptics";
+import { Alert, Text, TouchableOpacity, View } from "react-native";
 import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
-
-const INPUT_METHOD_ICON: Record<
-  Transaction["input_method"],
-  keyof typeof Feather.glyphMap
-> = {
-  MANUAL: "edit-3",
-  RECEIPT_SCAN: "camera",
-  VOICE: "mic",
-};
 
 export function TransactionRow({
   tx,
@@ -23,80 +16,109 @@ export function TransactionRow({
   onDelete?: () => void;
 }) {
   const currency = useUserStore((s) => s.currency);
-  const config = getCategoryConfig(tx.category);
+  const config = getCategoryConfig(tx.category) || {
+    label: tx.category || "Other",
+    icon: "📦",
+    color: "#BDC3C7",
+    type: "EXPENSE",
+  };
   const isIncome = tx.type === "INCOME";
+  const deleteMutation = useDeleteTransaction();
 
-  const row = (
-    <View
-      className="flex-row items-center bg-white rounded-2xl border border-[#E8E6DF] pl-3 pr-3.5 py-4"
-      style={{ borderLeftWidth: 3, borderLeftColor: config.color }}
+  const handleDelete = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (onDelete) {
+      onDelete();
+      return;
+    }
+
+    Alert.alert(
+      "Delete Transaction",
+      "Are you sure you want to delete this transaction?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => deleteMutation.mutate(tx.id),
+        },
+      ]
+    );
+  };
+
+  const renderRightActions = () => (
+    <TouchableOpacity
+      onPress={handleDelete}
+      activeOpacity={0.85}
+      className="bg-[#FF4D4F] rounded-[18px] ml-2 px-5 items-center justify-center flex-row"
     >
-      <View
-        className="w-10 h-10 rounded-full items-center justify-center mr-3"
-        style={{ backgroundColor: `${config.color}22` }}
-      >
-        <Text className="text-lg">{config.icon}</Text>
-      </View>
-
-      <View className="flex-1">
-        <Text className="text-brand-bg text-sm font-medium" numberOfLines={1}>
-          {tx.description || config.label}
-        </Text>
-        <View className="flex-row items-center gap-1.5 mt-0.5">
-          <Feather
-            name={INPUT_METHOD_ICON[tx.input_method]}
-            size={11}
-            color="#8A8D96"
-          />
-          <View
-            className="px-1.5 py-0.5 rounded-full"
-            style={{ backgroundColor: `${config.color}1A` }}
-          >
-            <Text
-              className="text-[10px] font-medium"
-              style={{ color: config.color }}
-            >
-              {config.label}
-            </Text>
-          </View>
-          {tx.is_flagged && (
-            <View className="flex-row items-center gap-1 ml-1">
-              <Feather name="alert-triangle" size={11} color="#FF6B4A" />
-              <Text className="text-brand-coral text-[11px]">Flagged</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      <Text
-        className={`text-sm font-medium ${
-          isIncome ? "text-brand-success" : "text-brand-coral"
-        }`}
-      >
-        {isIncome ? "+" : "-"}
-        {formatPrice(tx.amount, currency)}
-      </Text>
-    </View>
+      <Feather name="trash-2" size={20} color="#FFFFFF" />
+    </TouchableOpacity>
   );
-
-  if (!onDelete) {
-    return <View className="mb-2.5">{row}</View>;
-  }
 
   return (
     <View className="mb-2.5">
       <Swipeable
         overshootRight={false}
-        renderRightActions={() => (
-          <TouchableOpacity
-            onPress={onDelete}
-            className="bg-brand-coral rounded-2xl ml-2 w-16 items-center justify-center"
-          >
-            <Feather name="trash-2" size={18} color="#fff" />
-          </TouchableOpacity>
-        )}
+        renderRightActions={renderRightActions}
       >
-        {row}
+        <View
+          className="flex-row items-center bg-white rounded-[18px] border border-[#E8E6DF] px-3.5 py-3.5 shadow-sm"
+          style={{
+            borderLeftWidth: 4,
+            borderLeftColor: config.color,
+          }}
+        >
+          {/* Category Icon Circle */}
+          <View
+            className="w-11 h-11 rounded-full items-center justify-center mr-3"
+            style={{ backgroundColor: `${config.color}1F` }}
+          >
+            <Text className="text-xl">{config.icon}</Text>
+          </View>
+
+          {/* Title & Category Pill */}
+          <View className="flex-1 mr-2">
+            <Text
+              className="text-[#1A1D26] text-[14px] font-semibold mb-1"
+              numberOfLines={1}
+            >
+              {tx.description || config.label}
+            </Text>
+            <View className="flex-row items-center gap-1.5">
+              <Feather name="edit-2" size={11} color="#8A8D96" />
+              <View
+                className="px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: `${config.color}18` }}
+              >
+                <Text
+                  className="text-[11px] font-medium"
+                  style={{ color: config.color }}
+                >
+                  {config.label}
+                </Text>
+              </View>
+              {tx.is_flagged && (
+                <View className="flex-row items-center gap-0.5 ml-1">
+                  <Feather name="alert-triangle" size={11} color="#FF6B4A" />
+                  <Text className="text-[#FF6B4A] text-[11px] font-medium">
+                    Flagged
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Amount */}
+          <Text
+            className={`text-[14px] font-semibold ${
+              isIncome ? "text-[#3DDC84]" : "text-[#FF6B4A]"
+            }`}
+          >
+            {isIncome ? "+" : "-"}
+            {formatPrice(tx.amount, currency)}
+          </Text>
+        </View>
       </Swipeable>
     </View>
   );

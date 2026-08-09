@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 const FILTER_TABS: { label: string; value: TransactionType | "ALL" }[] = [
   { label: "All", value: "ALL" },
@@ -19,6 +19,7 @@ const FILTER_TABS: { label: string; value: TransactionType | "ALL" }[] = [
 ];
 
 export default function TransactionsScreen() {
+  const insets = useSafeAreaInsets();
   const [activeFilter, setActiveFilter] = useState<TransactionType | "ALL">(
     "ALL",
   );
@@ -85,6 +86,9 @@ export default function TransactionsScreen() {
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => <TransactionRow tx={item} />}
             showsVerticalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingBottom: Math.max(insets.bottom + 100, 120),
+            }}
             onRefresh={refetch}
             refreshing={isRefetching}
           />

@@ -22,7 +22,7 @@ import {
   View,
 } from "react-native";
 import { RefreshControl } from "react-native-gesture-handler";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -53,6 +53,7 @@ const QUICK_ACTIONS = [
 ] as const;
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const { user } = useUser();
   const router = useRouter();
   const currency = useUserStore((s) => s.currency);
@@ -160,6 +161,9 @@ export default function HomeScreen() {
     <SafeAreaView className="flex-1 bg-brand-bg" edges={["top"]}>
       <ScrollView
         className="flex-1 bg-brand-body"
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom + 100, 120),
+        }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />

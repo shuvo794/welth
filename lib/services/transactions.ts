@@ -58,3 +58,11 @@ export async function getTransactions(
   if (error) throw error;
   return data as Transaction[];
 }
+
+export async function deleteTransaction(
+  supabase: SupabaseClient,
+  id: string,
+) {
+  const { error } = await supabase.from("transactions").delete().eq("id", id);
+  if (error) throw error;
+}
