@@ -75,7 +75,6 @@ export default function SignIn() {
     control: resetSubmitControl,
     handleSubmit: handleResetSubmit,
     formState: { errors: resetSubmitErrors },
-    reset: resetSubmitForm,
   } = useForm<ResetPasswordSubmitFormValues>({
     resolver: zodResolver(resetPasswordSubmitSchema),
     mode: "onBlur",
@@ -411,7 +410,7 @@ export default function SignIn() {
           {/* Bottom Navigation to Sign Up */}
           <View className="flex-row items-center justify-center mt-8 pb-4">
             <Text className="text-gray-500 text-base font-medium">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
             </Text>
             <TouchableOpacity onPress={() => router.push("/(auth)/sign-up")}>
               <Text className="text-blue-600 text-base font-bold">

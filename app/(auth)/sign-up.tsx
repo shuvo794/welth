@@ -20,7 +20,7 @@ import { SignUpFormValues, codeSchema, signUpSchema } from "@/lib/schemas/auth";
 
 export default function SignUp() {
   const insets = useSafeAreaInsets();
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded } = useAuth();
   const { signUp } = useSignUp();
   const { setActive } = useClerk();
   const router = useRouter();
