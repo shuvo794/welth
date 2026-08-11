@@ -1,201 +1,321 @@
-import { useClerk, useUser } from "@clerk/expo";
-import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import React, { useState } from "react";
+import { AccountModal } from "@/components/AccountModal";
+import { CurrencyPicker } from "@/components/CurrencyPicker";
+import { useSetDefaultAccount } from "@/hooks/mutations/useAccountMutations";
+import { useAccountsQuery } from "@/hooks/queries/useAccountsQuery";
+import { useSupabase } from "@/hooks/useSupabase";
+import { Account, AccountType } from "@/lib/services/accounts";
+import { formatPrice } from "@/lib/utils";
+import { useUserStore } from "@/store/userStore";
+import { useAuth, useUser } from "@clerk/expo";
+import { Feather } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import { useState } from "react";
 import {
   ActivityIndicator,
-  Image,
-  Modal,
+  Alert,
   ScrollView,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+const ACCOUNT_ICON: Record<AccountType, keyof typeof Feather.glyphMap> = {
+  CASH: "dollar-sign",
+  BANK: "home",
+  CREDIT_CARD: "credit-card",
+  SAVINGS: "shield",
+};
+
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text className="text-brand-text-muted text-[11px] uppercase tracking-wide mb-2 mt-6 mx-5">
+      {children}
+    </Text>
+  );
+}
+
+function Row({
+  icon,
+  label,
+  value,
+  onPress,
+  showChevron = true,
+  danger = false,
+}: {
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  value?: string;
+  onPress?: () => void;
+  showChevron?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={!onPress}
+      className="flex-row items-center bg-white px-4 py-3.5 border-b border-[#F0EEE7] last:border-b-0"
+    >
+      <View className="w-8 h-8 rounded-full bg-[#F5F4F0] items-center justify-center mr-3">
+        <Feather name={icon} size={15} color={danger ? "#FF6B4A" : "#5C5F68"} />
+      </View>
+      <Text
+        className={`flex-1 text-sm ${
+          danger ? "text-brand-coral" : "text-brand-bg"
+        }`}
+      >
+        {label}
+      </Text>
+      {value && (
+        <Text className="text-brand-text-secondary text-xs mr-2">{value}</Text>
+      )}
+      {showChevron && onPress && (
+        <Feather name="chevron-right" size={16} color="#BDC3C7" />
+      )}
+    </TouchableOpacity>
+  );
+}
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets();
   const { user } = useUser();
-  const { signOut } = useClerk();
+  const { signOut } = useAuth();
+  const router = useRouter();
+  const supabase = useSupabase();
+  const currency = useUserStore((state) => state.currency);
+  const setCurrency = useUserStore((state) => state.setCurrency);
+  const [biometricLock, setBiometricLock] = useState(false);
 
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
-  const fullName = user?.fullName || `${user?.firstName || ""} ${user?.lastName || ""}`.trim() || "User";
-  const email = user?.primaryEmailAddress?.emailAddress || "No email provided";
-  const avatarUrl = user?.imageUrl;
+  const {
+    data: accounts = [],
+    isLoading: loadingAccounts,
+    isError: accountsError,
+  } = useAccountsQuery();
+  const { mutateAsync: setDefaultAccount } = useSetDefaultAccount();
 
-  const handleLogoutPress = () => {
+  const handlePickAvatar = async () => {
+    if (!user) return;
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        "Permission needed",
+        "Allow photo library access to set a profile picture.",
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
+    if (result.canceled) return;
+
+    setUploadingAvatar(true);
     try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch {}
-    setShowLogoutModal(true);
+      const asset = result.assets[0];
+      const filename = asset.uri.split("/").pop() || "avatar.jpg";
+      const match = /\.(\w+)$/.exec(filename);
+      const mimeType = match ? `image/${match[1]}` : "image/jpeg";
+      const dataUrl = `data:${mimeType};base64,${asset.base64}`;
+
+      await user.setProfileImage({ file: dataUrl });
+    } catch (err) {
+      console.error("Avatar upload failed:", err);
+      Alert.alert("Error", "Couldn't upload your photo. Please try again.");
+    } finally {
+      setUploadingAvatar(false);
+    }
   };
 
-  const confirmLogout = async () => {
-    try {
-      setIsLoggingOut(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {}
+  const handleSignOut = () => {
+    Alert.alert("Sign out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign out",
+        style: "destructive",
+        onPress: async () => {
+          await signOut();
+          router.replace("/sign-in");
+        },
+      },
+    ]);
+  };
 
+  const closeModal = () => {
+    setModalVisible(false);
+    setEditingAccount(null);
+  };
+
+  const handleMadeDefault = async () => {
+    if (!editingAccount) return;
     try {
-      await signOut();
-    } catch (error) {
-      console.error("Sign out error:", error);
-      setIsLoggingOut(false);
-      setShowLogoutModal(false);
+      await setDefaultAccount(editingAccount.id);
+      closeModal();
+    } catch {
+      Alert.alert("Error", "Couldn't set this as the default account.");
+    }
+  };
+
+  const handleCurrencySelect = async (selected: { code: string }) => {
+    setCurrencyPickerOpen(false);
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({ currency: selected.code })
+        .eq("clerk_id", user.id);
+      if (error) throw error;
+      setCurrency(selected.code);
+    } catch {
+      Alert.alert("Error", "Couldn't update your currency.");
     }
   };
 
   return (
-    <View className="flex-1 bg-[#F8F9FA]">
+    <SafeAreaView className="flex-1 bg-brand-body" edges={["top"]}>
       <ScrollView
-        contentContainerStyle={{
-          paddingTop: Math.max(insets.top + 16, 32),
-          paddingBottom: Math.max(insets.bottom + 100, 120),
-          paddingHorizontal: 20,
-        }}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
       >
-        {/* Screen Title Header */}
-        <View className="mb-6">
-          <Text className="text-2xl font-bold text-gray-900">Profile</Text>
-          <Text className="text-sm text-gray-500 mt-0.5">Manage your account and preferences</Text>
+        <View className="px-5 pt-3 pb-2">
+          <Text className="text-brand-bg text-xl font-semibold">Profile</Text>
         </View>
 
-        {/* User Profile Card */}
-        <View className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 items-center mb-6">
-          {avatarUrl ? (
-            <Image
-              source={{ uri: avatarUrl }}
-              style={{ width: 88, height: 88, borderRadius: 44 }}
-              className="mb-4 bg-gray-200"
-            />
-          ) : (
-            <View className="w-22 h-22 rounded-full bg-blue-600 items-center justify-center mb-4">
-              <Text className="text-3xl font-bold text-white">
-                {fullName.charAt(0).toUpperCase()}
+        {/* User card */}
+        <View className="mx-5 mt-2 bg-brand-bg rounded-2xl px-5 py-6 items-center">
+          <TouchableOpacity
+            onPress={handlePickAvatar}
+            disabled={uploadingAvatar}
+            activeOpacity={0.8}
+            className="w-20 h-20 rounded-full bg-[#1A1D26] items-center justify-center overflow-hidden border-2 border-[#2A2E3A]"
+          >
+            {uploadingAvatar ? (
+              <ActivityIndicator color="#8A8D96" />
+            ) : user?.imageUrl && user.hasImage ? (
+              <Image
+                source={{ uri: user.imageUrl }}
+                style={{ width: 80, height: 80 }}
+                contentFit="cover"
+              />
+            ) : (
+              <Feather name="user" size={30} color="#8A8D96" />
+            )}
+            <View className="absolute bottom-0 inset-x-0 h-6 bg-black/50 items-center justify-center">
+              <Feather name="camera" size={13} color="#F2EFE9" />
+            </View>
+          </TouchableOpacity>
+
+          <Text className="text-white text-2xl font-bold mt-3.5">
+            {user?.firstName} {user?.lastName}
+          </Text>
+          <View className="flex-row items-center gap-1.5 mt-1">
+            <Feather name="mail" size={11} color="#8A8D96" />
+            <Text
+              className="text-brand-text-secondary text-xs"
+              numberOfLines={1}
+            >
+              {user?.emailAddresses?.[0]?.emailAddress}
+            </Text>
+          </View>
+        </View>
+
+        {/* Accounts */}
+        <SectionLabel>Accounts</SectionLabel>
+        <View className="mx-5 rounded-2xl overflow-hidden border border-[#E8E6DF]">
+          {loadingAccounts ? (
+            <View className="bg-white px-4 py-5 items-center">
+              <ActivityIndicator color="#5C5F68" />
+            </View>
+          ) : accountsError ? (
+            <View className="bg-white px-4 py-5 items-center">
+              <Text className="text-brand-text-muted text-xs">
+                Couldn&apos;t load your accounts.
               </Text>
             </View>
+          ) : (
+            accounts.map((account) => (
+              <Row
+                key={account.id}
+                icon={ACCOUNT_ICON[account.type]}
+                label={account.name + (account.is_default ? " (default)" : "")}
+                value={formatPrice(account.balance, currency)}
+                onPress={() => {
+                  setEditingAccount(account);
+                  setModalVisible(true);
+                }}
+              />
+            ))
           )}
+          <Row
+            icon="plus"
+            label="Add account"
+            onPress={() => {
+              setEditingAccount(null);
+              setModalVisible(true);
+            }}
+          />
+        </View>
 
-          <Text className="text-xl font-bold text-gray-900 text-center">{fullName}</Text>
-          <Text className="text-sm font-medium text-gray-500 mt-1 text-center">{email}</Text>
+        {/* Preferences */}
+        <SectionLabel>Preferences</SectionLabel>
+        <View className="mx-5 rounded-2xl overflow-hidden border border-[#E8E6DF]">
+          <Row
+            icon="dollar-sign"
+            label="Currency"
+            value={currency}
+            onPress={() => setCurrencyPickerOpen(true)}
+          />
 
-          <View className="flex-row items-center bg-blue-50 px-3 py-1.5 rounded-full mt-3">
-            <View className="w-2 h-2 rounded-full bg-blue-600 mr-2" />
-            <Text className="text-xs font-semibold text-blue-700">Signed In</Text>
+          <View className="flex-row items-center bg-white px-4 py-3.5">
+            <View className="w-8 h-8 rounded-full bg-[#F5F4F0] items-center justify-center mr-3">
+              <Feather name="lock" size={15} color="#5C5F68" />
+            </View>
+            <Text className="flex-1 text-sm text-brand-bg">Biometric lock</Text>
+            <Switch value={biometricLock} onValueChange={setBiometricLock} />
           </View>
         </View>
 
-        {/* Menu Section 1: Account Settings */}
-        <View className="mb-6">
-          <Text className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 px-1">
-            Account
-          </Text>
-          <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-            <TouchableOpacity className="flex-row items-center px-4 py-3.5 border-b border-gray-100 active:bg-gray-50">
-              <View className="w-9 h-9 rounded-xl bg-blue-50 items-center justify-center mr-3">
-                <Ionicons name="person-outline" size={20} color="#2563EB" />
-              </View>
-              <Text className="flex-1 text-base font-semibold text-gray-800">Personal Information</Text>
-              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-            </TouchableOpacity>
-
-            <TouchableOpacity className="flex-row items-center px-4 py-3.5 border-b border-gray-100 active:bg-gray-50">
-              <View className="w-9 h-9 rounded-xl bg-emerald-50 items-center justify-center mr-3">
-                <Ionicons name="shield-checkmark-outline" size={20} color="#10B981" />
-              </View>
-              <Text className="flex-1 text-base font-semibold text-gray-800">Security & Privacy</Text>
-              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-            </TouchableOpacity>
-
-            <TouchableOpacity className="flex-row items-center px-4 py-3.5 active:bg-gray-50">
-              <View className="w-9 h-9 rounded-xl bg-purple-50 items-center justify-center mr-3">
-                <Ionicons name="card-outline" size={20} color="#8B5CF6" />
-              </View>
-              <Text className="flex-1 text-base font-semibold text-gray-800">Payment Methods</Text>
-              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
+        {/* Account actions */}
+        <SectionLabel>Account</SectionLabel>
+        <View className="mx-5 rounded-2xl overflow-hidden border border-[#E8E6DF]">
+          <Row
+            icon="log-out"
+            label="Sign out"
+            onPress={handleSignOut}
+            showChevron={false}
+            danger
+          />
         </View>
-
-        {/* Menu Section 2: Preferences */}
-        <View className="mb-6">
-          <Text className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3 px-1">
-            Preferences
-          </Text>
-          <View className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-            <TouchableOpacity className="flex-row items-center px-4 py-3.5 border-b border-gray-100 active:bg-gray-50">
-              <View className="w-9 h-9 rounded-xl bg-amber-50 items-center justify-center mr-3">
-                <Ionicons name="notifications-outline" size={20} color="#F59E0B" />
-              </View>
-              <Text className="flex-1 text-base font-semibold text-gray-800">Notifications</Text>
-              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-            </TouchableOpacity>
-
-            <TouchableOpacity className="flex-row items-center px-4 py-3.5 active:bg-gray-50">
-              <View className="w-9 h-9 rounded-xl bg-sky-50 items-center justify-center mr-3">
-                <Ionicons name="help-circle-outline" size={20} color="#0EA5E9" />
-              </View>
-              <Text className="flex-1 text-base font-semibold text-gray-800">Help & Support</Text>
-              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Logout Button */}
-        <TouchableOpacity
-          onPress={handleLogoutPress}
-          className="bg-red-50 border border-red-100 rounded-2xl py-4 flex-row items-center justify-center active:bg-red-100"
-        >
-          <Ionicons name="log-out-outline" size={22} color="#EF4444" />
-          <Text className="text-red-600 font-bold text-base ml-2">Log Out</Text>
-        </TouchableOpacity>
       </ScrollView>
 
-      {/* Logout Confirmation Modal */}
-      <Modal
-        visible={showLogoutModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => !isLoggingOut && setShowLogoutModal(false)}
-      >
-        <View className="flex-1 bg-black/50 justify-center items-center px-6">
-          <View className="bg-white w-full max-w-sm rounded-3xl p-6 items-center shadow-xl">
-            <View className="w-16 h-16 rounded-full bg-red-100 items-center justify-center mb-4">
-              <Ionicons name="log-out-outline" size={32} color="#EF4444" />
-            </View>
+      {user && (
+        <AccountModal
+          visible={modalVisible}
+          account={editingAccount}
+          onClose={closeModal}
+          onSaved={closeModal}
+          onDeleted={closeModal}
+          onMadeDefault={handleMadeDefault}
+        />
+      )}
 
-            <Text className="text-xl font-bold text-gray-900 text-center">Log Out?</Text>
-            <Text className="text-sm text-gray-500 text-center mt-2 mb-6">
-              Are you sure you want to log out of your account?
-            </Text>
-
-            <View className="flex-row gap-3 w-full">
-              <TouchableOpacity
-                disabled={isLoggingOut}
-                onPress={() => setShowLogoutModal(false)}
-                className="flex-1 bg-gray-100 py-3.5 rounded-2xl items-center"
-              >
-                <Text className="text-gray-700 font-semibold text-base">Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                disabled={isLoggingOut}
-                onPress={confirmLogout}
-                className="flex-1 bg-red-600 py-3.5 rounded-2xl items-center justify-center"
-              >
-                {isLoggingOut ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text className="text-white font-semibold text-base">Log Out</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
+      <CurrencyPicker
+        visible={currencyPickerOpen}
+        selectedCode={currency}
+        onSelect={handleCurrencySelect}
+        onClose={() => setCurrencyPickerOpen(false)}
+      />
+    </SafeAreaView>
   );
 }
